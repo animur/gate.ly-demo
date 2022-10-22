@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gately/internal/app"
+	"gately/internal/config"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -21,7 +22,7 @@ const (
 	envPrefix = "GATELY"
 )
 
-var appConfig app.Config
+var appConfig config.AppConfig
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
@@ -65,13 +66,13 @@ func init() {
 	// Order of precedence is is_set(Flag value) > is_set(Corresponding env var) > Default flag value
 	// Passwords and usernames should come only from env vars.
 	runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	runCmd.Flags().StringP("port", "p", "80", "Gately application port")
-	runCmd.Flags().StringP("redis-host", "r", "localhost:6379", "Redis host")
+	runCmd.Flags().StringP("port", "p", "8080", "Gately application port")
+	runCmd.Flags().StringP("redis-host", "r", "redis:6379", "Redis host")
 	runCmd.Flags().StringP("redis-user", "", "", "")
 	_ = runCmd.Flags().MarkHidden("redis-user")
 	runCmd.Flags().StringP("redis-pass", "", "", "")
 	_ = runCmd.Flags().MarkHidden("redis-pass")
-	runCmd.Flags().StringP("mongo-host", "c", "localhost:9042", "MongoDB host")
+	runCmd.Flags().StringP("mongo-host", "c", "mongo:27017", "MongoDB host")
 	runCmd.Flags().StringP("mongo-db-name", "", "testDB",
 		"Database that stores URL mappings in MongoDB")
 	runCmd.Flags().StringP("mongo-user", "", "", "")
