@@ -6,6 +6,7 @@ require (
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/eko/gocache/v3 v3.1.1
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/google/uuid v1.3.0
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.6.0

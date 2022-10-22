@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -42,7 +43,13 @@ func New(cfg config.AppConfig) *AppController {
 	// MongoDB is our source of truth for all URL mappings
 	// This is a read heavy application and MongoDB is best suited for read heavy apps
 	mongoURI := fmt.Sprintf("%s://%s", "mongodb", cfg.MongoHost)
-	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(mongoURI))
+	credential := options.Credential{
+		Username: cfg.MongoUser,
+		Password: cfg.MongoPass,
+	}
+	mongoClient, err := mongo.Connect(context.TODO(),
+		options.Client().ApplyURI(mongoURI).SetAuth(credential),
+	)
 	if err != nil {
 		// Ok to panic as we are still in application bootstrap
 		panic(err)
@@ -54,7 +61,7 @@ func New(cfg config.AppConfig) *AppController {
 		panic(err)
 	}
 
-	urlStore := dal.New(dal.WithMongoDB(mongoClient))
+	urlStore := dal.New(dal.WithMongoDB(mongoClient), dal.WithDatabase(cfg.MongoDbName), dal.WithTable(cfg.MongoCollectionName))
 
 	urlServ := service.New(
 		service.WithMultiCache(cache),
@@ -73,16 +80,21 @@ func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 	}
 
 	mapped, err := ctrlr.uss.CreateUrlMapping(c.Request().Context(), req.LongUrl)
+
+	if err != nil || mapped == "" {
+		log.Printf("Unable to create a URL mapping. Mapped = %s .Err = %v", mapped, err)
+		return c.String(http.StatusBadRequest, err.Error())
+	}
 	resp := &UrlMappingResponse{
 		LongUrl:  req.LongUrl,
 		ShortUrl: mapped,
 		Ts:       time.Now().String(),
 	}
 
-	if err := c.Bind(resp); err != nil {
-		return err
-	}
-	return c.JSON(http.StatusCreated, resp)
+	log.Printf("Successfully created URL mapping : %+v ", resp)
+
+	return c.JSONPretty(http.StatusCreated, resp, "  ")
+
 }
 
 func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
