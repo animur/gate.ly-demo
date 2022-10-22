@@ -1,0 +1,50 @@
+# Docker Compose file Reference (https://docs.docker.com/compose/compose-file/)
+version: '3.8'
+
+# Define services
+services:
+  # App Service
+  gately:
+    # Configuration for building the docker image for the service
+    build:
+      context: . # Use an image built from the specified dockerfile in the current directory.
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # Forward the exposed port 8080 on the container to port 8080 on the host machine
+    restart: unless-stopped
+    depends_on:
+      - redis # This service depends on redis. Start that first
+      - mongo
+    environment: # Pass environment variables to the service
+      - GATELY_REDIS_HOST=redis:6379
+      - GATELY_MONGO_HOST=mongo:27017
+      - GATELY_MONGO_USER=user
+      - GATELY_MONGO_PASS=pass
+      - GATELY_MONGO_DB_NAME=mappings
+    networks: # Networks to join (Services on the same network can communicate with each other using their name)
+      - backend
+
+  # Redis Service
+  redis:
+    image: "redis:alpine" # Use a public Redis image to build the redis service
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - ~/:/data/redis
+
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=user
+      - MONGO_INITDB_ROOT_PASSWORD=pwd
+      - MONGO_INITDB_DATABASE=mappings
+    volumes:
+      - ~/:/data/mongo
+    networks: # Networks to join (Services on the same network can communicate with each other using their name)
+      - backend
+
+networks:
+  backend:

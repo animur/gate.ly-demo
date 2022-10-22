@@ -3,14 +3,14 @@ package multicache
 import (
 	"time"
 
-	"gately/internal/app"
+	"gately/internal/config"
 	"github.com/dgraph-io/ristretto"
 	"github.com/eko/gocache/v3/cache"
 	"github.com/eko/gocache/v3/store"
 	"github.com/go-redis/redis/v8"
 )
 
-func New(cfg app.Config) *cache.ChainCache[string] {
+func New(cfg config.AppConfig) *cache.ChainCache[string] {
 	// Ristretto is our in-memory Layer-1 LRU multicache
 	// The least frequently accessed sites will be evicted first
 	lruCache, err := ristretto.NewCache(

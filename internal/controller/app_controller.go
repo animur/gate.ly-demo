@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"gately/internal/app"
+	"gately/internal/config"
 	"gately/internal/multicache"
 	"gately/internal/service"
 	"github.com/labstack/echo/v4"
@@ -30,7 +30,7 @@ type (
 	}
 )
 
-func New(cfg app.Config) *AppController {
+func New(cfg config.AppConfig) *AppController {
 
 	// Instantiate our multicache
 	// This follows a dual layered caching strategy
@@ -56,6 +56,7 @@ func New(cfg app.Config) *AppController {
 		service.WithMultiCache(cache),
 		service.WithMongoDB(mongoClient),
 	)
+	fmt.Print("Successfully connected to MongoDB and Redis")
 	return &AppController{uss: urlServ}
 }
 
@@ -79,7 +80,8 @@ func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
 
 func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
 
-	// urlId := (c.Param("urlId"))
+	// urlId := c.Param("urlId")
 	longUrl := ""
+	// Redirect to the original URL
 	return c.Redirect(http.StatusSeeOther, longUrl)
 }

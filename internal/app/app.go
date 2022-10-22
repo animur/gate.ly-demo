@@ -1,23 +1,16 @@
 package app
 
 import (
+	"fmt"
 	"time"
 
+	"gately/internal/config"
 	"gately/internal/controller"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
-
-type Config struct {
-	Port      string `mapstructure:"port"`
-	RedisHost string `mapstructure:"redis-host"`
-	RedisPass string `mapstructure:"redis-pass"`
-	MongoHost string `mapstructure:"mongo-host"`
-	MongoUser string `mapstructure:"mongo-user"`
-	MongoPass string `mapstructure:"mongo-pass"`
-}
 
 // ZapLogger is an example of echo middleware that logs requests using logger "zap"
 func ZapLogger(log *zap.Logger) echo.MiddlewareFunc {
@@ -65,7 +58,7 @@ func ZapLogger(log *zap.Logger) echo.MiddlewareFunc {
 	}
 }
 
-func Run(cfg Config) {
+func Run(cfg config.AppConfig) {
 
 	ctrlr := controller.New(cfg)
 
@@ -84,5 +77,6 @@ func Run(cfg Config) {
 	e.DELETE("/api/v1/urls/:urlId", ctrlr.DeleteUrlMapping)
 
 	// Start server
-	e.Logger.Fatal(e.Start(":80"))
+	address := fmt.Sprintf(":%s", cfg.Port)
+	e.Logger.Fatal(e.Start(address))
 }
