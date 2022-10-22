@@ -75,6 +75,8 @@ func init() {
 	runCmd.Flags().StringP("mongo-host", "c", "mongo:27017", "MongoDB host")
 	runCmd.Flags().StringP("mongo-db-name", "", "testDB",
 		"Database that stores URL mappings in MongoDB")
+	runCmd.Flags().StringP("mongo-collection-name", "", "testCollection",
+		"Mongo Collection that stores URL mappings in MongoDB")
 	runCmd.Flags().StringP("mongo-user", "", "", "")
 	_ = runCmd.Flags().MarkHidden("mongo-user")
 	runCmd.Flags().StringP("mongo-pass", "", "", "")

@@ -20,7 +20,8 @@ services:
       - GATELY_MONGO_HOST=mongo:27017
       - GATELY_MONGO_USER=user
       - GATELY_MONGO_PASS=pass
-      - GATELY_MONGO_DB_NAME=mappings
+      - GATELY_MONGO_DB_NAME=gately_store
+      - GATELY_MONGO_COLLECTION_NAME=url_mappings
     networks: # Networks to join (Services on the same network can communicate with each other using their name)
       - backend
 
@@ -31,18 +32,19 @@ services:
     networks:
       - backend
     volumes:
-      - ~/:/data/redis
+      - ./:/data/redis
 
   mongo:
-    image: mongo:5.0
+    image: mongo:4.0
     ports:
       - "27017:27017"
     environment:
       - MONGO_INITDB_ROOT_USERNAME=user
-      - MONGO_INITDB_ROOT_PASSWORD=pwd
-      - MONGO_INITDB_DATABASE=mappings
+      - MONGO_INITDB_ROOT_PASSWORD=pass
+      - MONGO_INITDB_DATABASE=gately_store
     volumes:
-      - ~/:/data/mongo
+      - ./:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks: # Networks to join (Services on the same network can communicate with each other using their name)
       - backend
 
