@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"gately/internal/config"
+	"gately/internal/dal"
 	"gately/internal/multicache"
 	"gately/internal/service"
 	"github.com/labstack/echo/v4"
@@ -20,13 +22,13 @@ type AppController struct {
 
 type (
 	UrlMappingResponse struct {
-		LongUrl  int    `json:"long_url"`
+		LongUrl  string `json:"long_url"`
 		ShortUrl string `json:"short_curl"`
-		Ts       string `json:"Time"`
+		Ts       string `json:"time"`
 	}
 
 	UrlMappingRequest struct {
-		LongUrl int `json:"long_url"`
+		LongUrl string `json:"long_url"`
 	}
 )
 
@@ -52,9 +54,11 @@ func New(cfg config.AppConfig) *AppController {
 		panic(err)
 	}
 
+	urlStore := dal.New(dal.WithMongoDB(mongoClient))
+
 	urlServ := service.New(
 		service.WithMultiCache(cache),
-		service.WithMongoDB(mongoClient),
+		service.WithUrlStore(urlStore),
 	)
 	fmt.Print("Successfully connected to MongoDB and Redis")
 	return &AppController{uss: urlServ}
@@ -62,9 +66,19 @@ func New(cfg config.AppConfig) *AppController {
 
 func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 
-	resp := &UrlMappingResponse{}
+	var req UrlMappingRequest
+	err := c.Bind(&req)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "bad request")
+	}
 
-	// service call
+	mapped, err := ctrlr.uss.CreateUrlMapping(c.Request().Context(), req.LongUrl)
+	resp := &UrlMappingResponse{
+		LongUrl:  req.LongUrl,
+		ShortUrl: mapped,
+		Ts:       time.Now().String(),
+	}
+
 	if err := c.Bind(resp); err != nil {
 		return err
 	}
@@ -73,15 +87,24 @@ func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 
 func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
 
-	// urlId := (c.Param("urlId"))
+	urlId := c.Param("urlId")
 
+	err := ctrlr.uss.DeleteUrlMapping(c.Request().Context(), urlId)
+
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, fmt.Sprintf("Unable to delete: %v", err))
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 
 func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
 
-	// urlId := c.Param("urlId")
-	longUrl := ""
+	urlId := c.Param("urlId")
+	longUrl, err := ctrlr.uss.RedirectUrl(c.Request().Context(), urlId)
+
+	if longUrl == "" || err != nil {
+		return c.JSON(http.StatusNotFound, "No short URL found")
+	}
 	// Redirect to the original URL
 	return c.Redirect(http.StatusSeeOther, longUrl)
 }

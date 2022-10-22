@@ -3,20 +3,20 @@ package service
 import (
 	"context"
 
+	"gately/internal/dal"
 	"github.com/eko/gocache/v3/cache"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type UrlShortener interface {
 	CreateUrlMapping(ctx context.Context, url string) (string, error)
 	DeleteUrlMapping(ctx context.Context, url string) error
-	RedirectUrl(ctx context.Context, shortUrl string) error
+	RedirectUrl(ctx context.Context, shortUrl string) (string, error)
 }
 
 type UrlShorteningService struct {
 	UrlShortener
 	cache *cache.ChainCache[string]
-	mongo *mongo.Client
+	store dal.UrlStore
 }
 
 func New(opts ...Option) *UrlShorteningService {
@@ -26,4 +26,19 @@ func New(opts ...Option) *UrlShorteningService {
 		opt(service)
 	}
 	return service
+}
+
+func (uss *UrlShorteningService) CreateUrlMapping(ctx context.Context, longUrl string) (string, error) {
+
+	return "", nil
+}
+
+func (uss *UrlShorteningService) DeleteUrlMapping(ctx context.Context, longUrl string) error {
+
+	return nil
+}
+
+func (uss *UrlShorteningService) RedirectUrl(ctx context.Context, shortUrl string) (string, error) {
+
+	return "", nil
 }

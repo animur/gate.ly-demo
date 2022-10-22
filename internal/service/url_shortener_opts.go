@@ -1,8 +1,8 @@
 package service
 
 import (
+	"gately/internal/dal"
 	"github.com/eko/gocache/v3/cache"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Option func(service *UrlShorteningService)
@@ -13,8 +13,8 @@ func WithMultiCache(cache *cache.ChainCache[string]) Option {
 	}
 }
 
-func WithMongoDB(mongo *mongo.Client) Option {
+func WithUrlStore(store dal.UrlStore) Option {
 	return func(service *UrlShorteningService) {
-		service.mongo = mongo
+		service.store = store
 	}
 }
