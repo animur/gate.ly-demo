@@ -2,8 +2,11 @@ package dal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -18,7 +21,8 @@ type UrlStore interface {
 	AddUrlEntry(ctx context.Context, entry *UrlMappingEntry) error
 	GetMappedUrl(ctx context.Context, shortUrl string) (string, error)
 	DeleteUrlEntry(ctx context.Context, shortUrl string) error
-	CheckIfUrlExists(ctx context.Context, longUrl string) bool
+	CheckIfUrlExists(ctx context.Context, url string, isLong bool) bool
+	UpdateUrlHitCount(ctx context.Context, shortUrl string) error
 }
 
 type MongoUrlStore struct {
@@ -29,23 +33,10 @@ type MongoUrlStore struct {
 }
 type UrlStoreOption func(store *MongoUrlStore)
 
-func WithMongoDB(c *mongo.Client) UrlStoreOption {
-	return func(store *MongoUrlStore) {
-		store.c = c
-	}
-}
-
-func WithDatabase(name string) UrlStoreOption {
-	return func(store *MongoUrlStore) {
-		store.name = name
-	}
-}
-
-func WithTable(cname string) UrlStoreOption {
-	return func(store *MongoUrlStore) {
-		store.collection = cname
-	}
-}
+var (
+	ErrUrlEntryAlreadyExists = errors.New("A URL entry already exists")
+	ErrUrlEntryNotFound      = errors.New("URL does not exist")
+)
 
 func New(opts ...UrlStoreOption) UrlStore {
 	store := &MongoUrlStore{}
@@ -57,12 +48,16 @@ func New(opts ...UrlStoreOption) UrlStore {
 
 func (ms *MongoUrlStore) AddUrlEntry(ctx context.Context, entry *UrlMappingEntry) error {
 
-	gatelyDB := ms.c.Database("gately_store")
-	urlTbl := gatelyDB.Collection("url_mappings")
-
+	if ms.CheckIfUrlExists(ctx, entry.LongUrl, true) {
+		log.Printf("A short URL already exists for %s", entry.LongUrl)
+		return fmt.Errorf("A short URL already exists for %s.", entry.LongUrl)
+	}
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
 	insertResult, err := urlTbl.InsertOne(ctx, *entry)
 	if err != nil {
-		panic(err)
+		log.Printf("Unable to add new URL entry. Err = %v", err)
+		return err
 	}
 	log.Printf("Successfully inserted insertId %s", insertResult)
 	return nil
@@ -70,15 +65,73 @@ func (ms *MongoUrlStore) AddUrlEntry(ctx context.Context, entry *UrlMappingEntry
 
 func (ms *MongoUrlStore) GetMappedUrl(ctx context.Context, shortUrl string) (string, error) {
 
-	return "", nil
+	if !ms.CheckIfUrlExists(ctx, shortUrl, false) {
+		log.Printf("No short URL exists for %s", shortUrl)
+		return "", ErrUrlEntryNotFound
+	}
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
+	var result UrlMappingEntry
+	err := urlTbl.FindOne(ctx, bson.D{{"short_url", shortUrl}}).Decode(&result)
+
+	if err != nil {
+		return "", fmt.Errorf("Unable to fetch original url for %s", shortUrl)
+	}
+
+	log.Printf("Found an existing entry for %s. Entry=%+v", shortUrl, result)
+
+	return result.LongUrl, nil
 }
 
-func (ms *MongoUrlStore) CheckIfUrlExists(ctx context.Context, longUrl string) bool {
+func (ms *MongoUrlStore) CheckIfUrlExists(ctx context.Context, url string, isLong bool) bool {
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
+	var result bson.M
 
-	return false
+	if isLong {
+		err := urlTbl.FindOne(ctx, bson.D{{"long_url", url}}).Decode(&result)
+
+		if err == mongo.ErrNoDocuments {
+			return false
+		}
+		log.Printf("Found an URL mapping entry for Long Url %s. Entry=%+v", url, result)
+	} else {
+		err := urlTbl.FindOne(ctx, bson.D{{"short_url", url}}).Decode(&result)
+
+		if err == mongo.ErrNoDocuments {
+			return false
+		}
+		log.Printf("Found an URL mapping entry for Short Url %s. Entry=%+v", url, result)
+	}
+
+	return true
 }
 
 func (ms *MongoUrlStore) DeleteUrlEntry(ctx context.Context, shortUrl string) error {
+
+	return nil
+}
+
+func (ms *MongoUrlStore) UpdateUrlHitCount(ctx context.Context, shortUrl string) error {
+	if !ms.CheckIfUrlExists(ctx, shortUrl, false) {
+		log.Printf("No short URL exists for %s", shortUrl)
+		return ErrUrlEntryNotFound
+	}
+
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
+	var result UrlMappingEntry
+	_ = urlTbl.FindOne(ctx, bson.D{{"short_url", shortUrl}}).Decode(&result)
+
+	replacement := result
+	replacement.Hits += 1
+	filter := bson.M{"short_url": result.ShortUrl}
+	updResult, err := urlTbl.ReplaceOne(ctx, filter, &replacement)
+	if err != nil {
+		log.Printf("Unable to add new URL entry. Err = %v", err)
+		return err
+	}
+	log.Printf("Successfully updated document %+v", updResult)
 
 	return nil
 }
