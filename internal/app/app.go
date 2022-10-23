@@ -24,7 +24,7 @@ func Run(cfg config.AppConfig) {
 	// Create a short url
 	e.POST("/api/v1/urls", ctrlr.CreateUrlMapping)
 	// Redirect to a real URL given a shortURL
-	e.GET("/:urlID", ctrlr.RedirectUrl)
+	e.GET("/:urlId", ctrlr.RedirectUrl)
 	// Delete a mapped URL
 	e.DELETE("/api/v1/urls/:urlId", ctrlr.DeleteUrlMapping)
 

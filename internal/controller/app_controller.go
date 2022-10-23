@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,7 +25,7 @@ type AppController struct {
 type (
 	UrlMappingResponse struct {
 		LongUrl  string `json:"long_url"`
-		ShortUrl string `json:"short_curl"`
+		ShortUrl string `json:"short_url"`
 		Ts       string `json:"time"`
 	}
 
@@ -79,12 +80,24 @@ func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request")
 	}
 
-	mapped, err := ctrlr.uss.CreateUrlMapping(c.Request().Context(), req.LongUrl)
+	sanitized, valid := ctrlr.uss.CheckAndSanitizeUrl(req.LongUrl)
+
+	if !valid {
+		return c.String(http.StatusBadRequest, "Malformed URL")
+	}
+	mapped, err := ctrlr.uss.CreateUrlMapping(c.Request().Context(), sanitized)
 
 	if err != nil || mapped == "" {
+
+		if errors.Is(err, dal.ErrUrlEntryAlreadyExists) {
+			log.Printf("URL already exists Mapped = %s .Err = %v", mapped, err)
+			return c.String(http.StatusBadRequest, err.Error())
+		}
+
 		log.Printf("Unable to create a URL mapping. Mapped = %s .Err = %v", mapped, err)
 		return c.String(http.StatusBadRequest, err.Error())
 	}
+
 	resp := &UrlMappingResponse{
 		LongUrl:  req.LongUrl,
 		ShortUrl: mapped,
@@ -115,8 +128,21 @@ func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
 	longUrl, err := ctrlr.uss.RedirectUrl(c.Request().Context(), urlId)
 
 	if longUrl == "" || err != nil {
-		return c.JSON(http.StatusNotFound, "No short URL found")
+
+		switch err {
+
+		case dal.ErrUrlEntryNotFound:
+			return c.JSON(http.StatusNotFound, fmt.Sprintf("No short URL found for %s", urlId))
+		default:
+			return c.JSON(http.StatusInternalServerError, "Internal Server error")
+		}
+
 	}
 	// Redirect to the original URL
 	return c.Redirect(http.StatusSeeOther, longUrl)
+}
+
+func (ctrlr *AppController) FetchUsageMetrics(c echo.Context) error {
+
+	return nil
 }
