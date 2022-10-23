@@ -22,6 +22,7 @@ type UrlShortener interface {
 	DeleteUrlMapping(ctx context.Context, url string) error
 	RedirectUrl(ctx context.Context, shortUrl string) (string, error)
 	CheckAndSanitizeUrl(longUrl string) (string, bool)
+	GetUrlMetrics(ctx context.Context, start, end int64, asc bool) ([]*dal.UrlMappingEntry, error)
 }
 
 type UrlShorteningService struct {
@@ -37,6 +38,11 @@ func New(opts ...Option) *UrlShorteningService {
 		opt(service)
 	}
 	return service
+}
+
+func (uss *UrlShorteningService) GetUrlMetrics(ctx context.Context, start, end int64, asc bool) ([]*dal.UrlMappingEntry, error) {
+
+	return uss.store.GetUrlMetrics(ctx, start, end, asc)
 }
 
 func (uss *UrlShorteningService) CheckAndSanitizeUrl(longUrl string) (string, bool) {
@@ -70,10 +76,11 @@ func (uss *UrlShorteningService) CreateUrlMapping(ctx context.Context, longUrl s
 	shortUrl := uuid.New()
 
 	err := uss.store.AddUrlEntry(ctx, &dal.UrlMappingEntry{
-		LongUrl:   longUrl,
-		ShortUrl:  shortUrl.String(),
-		Hits:      1,
-		CreatedTs: time.Now().Unix(),
+		LongUrl:      longUrl,
+		ShortUrl:     shortUrl.String(),
+		Hits:         1,
+		CreatedTs:    time.Now().Unix(),
+		LastAccessed: time.Now().Unix(),
 	})
 
 	if err != nil {
@@ -91,13 +98,15 @@ func (uss *UrlShorteningService) CreateUrlMapping(ctx context.Context, longUrl s
 	return fmt.Sprintf("%s/%s", appPrefix, shortUrl.String()), nil
 }
 
-func (uss *UrlShorteningService) DeleteUrlMapping(ctx context.Context, longUrl string) error {
+func (uss *UrlShorteningService) DeleteUrlMapping(ctx context.Context, shortUrl string) error {
 
-	return nil
+	return uss.store.DeleteUrlEntry(ctx, shortUrl)
 }
 
 func (uss *UrlShorteningService) RedirectUrl(ctx context.Context, shortUrl string) (string, error) {
 
+	// Update metrics when a redirect is successful
+	// This will run even if the redirect is rendered from the cache
 	defer func(ctx context.Context, c dal.UrlStore, shortUrl string) {
 		err := c.UpdateUrlHitCount(ctx, shortUrl)
 
@@ -105,6 +114,7 @@ func (uss *UrlShorteningService) RedirectUrl(ctx context.Context, shortUrl strin
 			log.Printf("Unable to update hit count for %s", shortUrl)
 		}
 	}(ctx, uss.store, shortUrl)
+
 	cached, err := uss.cache.Get(ctx, shortUrl)
 
 	if err == nil {

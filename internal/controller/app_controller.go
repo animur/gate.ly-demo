@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gately/internal/config"
@@ -119,7 +120,38 @@ func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, fmt.Sprintf("Unable to delete: %v", err))
 	}
-	return c.NoContent(http.StatusNoContent)
+	return c.NoContent(http.StatusOK)
+}
+
+func (ctrlr *AppController) GetUrlMetrics(c echo.Context) error {
+
+	sortOrder := c.QueryParam("sort")
+
+	start, err := strconv.ParseInt(c.QueryParam("start"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, fmt.Sprintf("Invalid start time: %v", err))
+	}
+
+	end, err := strconv.ParseInt(c.QueryParam("end"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, fmt.Sprintf("Invalid end time: %v", err))
+	}
+
+	var asc bool
+	if sortOrder == "asc" {
+		asc = true
+	}
+
+	if sortOrder == "desc" {
+		asc = false
+	}
+
+	metrics, err := ctrlr.uss.GetUrlMetrics(c.Request().Context(), start, end, asc)
+
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, fmt.Sprintf("Unable to get Url metrics: %v", err))
+	}
+	return c.JSONPretty(http.StatusOK, metrics, "  ")
 }
 
 func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
@@ -140,9 +172,4 @@ func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
 	}
 	// Redirect to the original URL
 	return c.Redirect(http.StatusSeeOther, longUrl)
-}
-
-func (ctrlr *AppController) FetchUsageMetrics(c echo.Context) error {
-
-	return nil
 }
