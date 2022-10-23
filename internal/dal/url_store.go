@@ -5,16 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type UrlMappingEntry struct {
-	ShortUrl  string `bson:"short_url" json:"short_url"`
-	LongUrl   string `bson:"long_url" json:"long_url"`
-	Hits      int64  `bson:"hits" json:"hits"`
-	CreatedTs int64  `bson:"created_ts" json:"created_ts"`
+	ShortUrl     string `bson:"short_url" json:"short_url"`
+	LongUrl      string `bson:"long_url" json:"long_url"`
+	Hits         int64  `bson:"hits" json:"hits"`
+	CreatedTs    int64  `bson:"created_ts" json:"created_ts"`
+	LastAccessed int64  `bson:"last_accessed" json:"last_accessed"`
 }
 
 type UrlStore interface {
@@ -23,6 +26,7 @@ type UrlStore interface {
 	DeleteUrlEntry(ctx context.Context, shortUrl string) error
 	CheckIfUrlExists(ctx context.Context, url string, isLong bool) bool
 	UpdateUrlHitCount(ctx context.Context, shortUrl string) error
+	GetUrlMetrics(ctx context.Context, start, end int64, asc bool) ([]*UrlMappingEntry, error)
 }
 
 type MongoUrlStore struct {
@@ -44,6 +48,55 @@ func New(opts ...UrlStoreOption) UrlStore {
 		opt(store)
 	}
 	return store
+}
+
+func (ms *MongoUrlStore) GetUrlMetrics(ctx context.Context, start, end int64, asc bool) ([]*UrlMappingEntry, error) {
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
+	// Specify the Sort option to sort the returned documents by hit count in
+	// ascending  or descending order.
+
+	sortOrder := -1
+	if asc {
+		sortOrder = 1
+	}
+	opts := options.Find().SetSort(bson.D{{"hits", sortOrder}})
+
+	filter := bson.M{
+		"last_accessed": bson.M{
+			"$gte": start,
+			"$lt":  end,
+		},
+	}
+	log.Printf("Trying to get entries between start=%d and end=%d", start, end)
+	cursor, err := urlTbl.Find(ctx, filter, opts)
+
+	if err != nil {
+		log.Printf("Unable to get metrics for the given dates. Err=%v", err)
+		return nil, err
+	}
+
+	var results []*UrlMappingEntry
+	// Get a list of all returned Urls and print them out in the required order.
+	for cursor.Next(ctx) {
+		// Create a value into which the single document can be decoded
+		elem := &UrlMappingEntry{}
+		err := cursor.Decode(elem)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, elem)
+
+	}
+
+	if err := cursor.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	// Close the cursor once finished
+	_ = cursor.Close(ctx)
+	return results, nil
 }
 
 func (ms *MongoUrlStore) AddUrlEntry(ctx context.Context, entry *UrlMappingEntry) error {
@@ -108,6 +161,13 @@ func (ms *MongoUrlStore) CheckIfUrlExists(ctx context.Context, url string, isLon
 }
 
 func (ms *MongoUrlStore) DeleteUrlEntry(ctx context.Context, shortUrl string) error {
+	gatelyDB := ms.c.Database(ms.name)
+	urlTbl := gatelyDB.Collection(ms.collection)
+	_, err := urlTbl.DeleteOne(ctx, bson.M{"short_url": shortUrl})
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -125,6 +185,7 @@ func (ms *MongoUrlStore) UpdateUrlHitCount(ctx context.Context, shortUrl string)
 
 	replacement := result
 	replacement.Hits += 1
+	replacement.LastAccessed = time.Now().Unix()
 	filter := bson.M{"short_url": result.ShortUrl}
 	updResult, err := urlTbl.ReplaceOne(ctx, filter, &replacement)
 	if err != nil {

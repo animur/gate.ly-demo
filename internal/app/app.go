@@ -27,7 +27,8 @@ func Run(cfg config.AppConfig) {
 	e.GET("/:urlId", ctrlr.RedirectUrl)
 	// Delete a mapped URL
 	e.DELETE("/api/v1/urls/:urlId", ctrlr.DeleteUrlMapping)
-
+	// Get URL access metrics
+	e.GET("/api/v1/metrics", ctrlr.GetUrlMetrics)
 	// Start server
 	address := fmt.Sprintf(":%s", cfg.Port)
 	e.Logger.Fatal(e.Start(address))
