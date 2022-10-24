@@ -63,7 +63,7 @@ func New(cfg config.AppConfig) *AppController {
 		panic(err)
 	}
 
-	urlStore := dal.New(dal.WithMongoDB(mongoClient), dal.WithDatabase(cfg.MongoDbName), dal.WithTable(cfg.MongoCollectionName))
+	urlStore := dal.New(dal.WithMongoClient(mongoClient), dal.WithDatabase(cfg.MongoDbName), dal.WithTable(cfg.MongoCollectionName))
 
 	urlServ := service.New(
 		service.WithMultiCache(cache),
