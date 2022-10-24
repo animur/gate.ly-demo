@@ -16,3 +16,4 @@ vendor/
 .idea/
 journal/
 diagnostic.data/
+bin/

@@ -100,6 +100,17 @@ func (uss *UrlShorteningService) CreateUrlMapping(ctx context.Context, longUrl s
 
 func (uss *UrlShorteningService) DeleteUrlMapping(ctx context.Context, shortUrl string) error {
 
+	cached, err := uss.cache.Get(ctx, shortUrl)
+
+	if err == nil {
+		log.Printf("Clearing cached URL entry for %s. Cached=%s", shortUrl, cached)
+		err = uss.cache.Delete(ctx, shortUrl)
+		if err != nil {
+			// If for some reason, we are unable to delete the cached entry, Just log.
+			// The stale entry will be gone in 3 mins
+			log.Printf("Clearing cached URL entry failed for %s. Cached=%s", shortUrl, cached)
+		}
+	}
 	return uss.store.DeleteUrlEntry(ctx, shortUrl)
 }
 
