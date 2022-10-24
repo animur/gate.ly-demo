@@ -17,3 +17,5 @@ vendor/
 journal/
 diagnostic.data/
 bin/
+./mongo-data
+./redis-data
