@@ -35,6 +35,10 @@ type (
 	}
 )
 
+type MetricsResponse struct {
+	metrics []*dal.UrlMappingEntry
+}
+
 func New(cfg config.AppConfig) *AppController {
 
 	// Instantiate our multicache
@@ -45,12 +49,9 @@ func New(cfg config.AppConfig) *AppController {
 	// MongoDB is our source of truth for all URL mappings
 	// This is a read heavy application and MongoDB is best suited for read heavy apps
 	mongoURI := fmt.Sprintf("%s://%s", "mongodb", cfg.MongoHost)
-	credential := options.Credential{
-		Username: cfg.MongoUser,
-		Password: cfg.MongoPass,
-	}
+
 	mongoClient, err := mongo.Connect(context.TODO(),
-		options.Client().ApplyURI(mongoURI).SetAuth(credential),
+		options.Client().ApplyURI(mongoURI),
 	)
 	if err != nil {
 		// Ok to panic as we are still in application bootstrap
@@ -63,6 +64,11 @@ func New(cfg config.AppConfig) *AppController {
 		panic(err)
 	}
 
+	if err := mongoClient.Database(cfg.MongoDbName).CreateCollection(context.TODO(), cfg.MongoCollectionName, nil); err != nil {
+		log.Fatalf("Unable to create MongoDB collection. Err=%v", err)
+	}
+
+	log.Printf("Successfully created MongoDB collection to store URLs")
 	urlStore := dal.New(dal.WithMongoClient(mongoClient), dal.WithDatabase(cfg.MongoDbName), dal.WithTable(cfg.MongoCollectionName))
 
 	urlServ := service.New(
@@ -73,6 +79,12 @@ func New(cfg config.AppConfig) *AppController {
 	return &AppController{uss: urlServ}
 }
 
+// CreateUrlMapping godoc
+// @Summary Create a short URL
+// @Produce json
+// @Param data body UrlMappingRequest true "URL mapping request"
+// @Success 200 {object} UrlMappingResponse
+// @Router /api/v1/urls [post]
 func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 
 	var req UrlMappingRequest
@@ -111,6 +123,12 @@ func (ctrlr *AppController) CreateUrlMapping(c echo.Context) error {
 
 }
 
+// DeleteUrlMapping godoc
+// @Summary Delete a short URL
+// @Produce json
+// @Param id path string true "The alphanumeric string/UUID that identifies a URL"
+// @Success 200
+// @Router /api/v1/urls/{id} [delete]
 func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
 
 	urlId := c.Param("urlId")
@@ -123,6 +141,14 @@ func (ctrlr *AppController) DeleteUrlMapping(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+// GetUrlMetrics godoc
+// @Summary Get URL access metrics
+// @Produce json
+// @Param start query string true "Start time for metrics"
+// @Param end query string true "End time for metrics"
+// @Param sort query string true "Sort can be asc or desc"
+// @Success 200 {object} MetricsResponse
+// @Router /api/v1/urls/{id} [get]
 func (ctrlr *AppController) GetUrlMetrics(c echo.Context) error {
 
 	sortOrder := c.QueryParam("sort")
@@ -154,6 +180,10 @@ func (ctrlr *AppController) GetUrlMetrics(c echo.Context) error {
 	return c.JSONPretty(http.StatusOK, metrics, "  ")
 }
 
+// RedirectUrl godoc
+// @Summary Redirect to short URL
+// @Success 302
+// @Router /{id} [get]
 func (ctrlr *AppController) RedirectUrl(c echo.Context) error {
 
 	urlId := c.Param("urlId")

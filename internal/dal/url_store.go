@@ -47,12 +47,12 @@ func New(opts ...UrlStoreOption) UrlStore {
 	for _, opt := range opts {
 		opt(store)
 	}
+	store.collection = fmt.Sprintf("%s.%s", store.name, store.collection)
 	return store
 }
 
 func (ms *MongoUrlStore) GetUrlMetrics(ctx context.Context, start, end int64, asc bool) ([]*UrlMappingEntry, error) {
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	// Specify the Sort option to sort the returned documents by hit count in
 	// ascending  or descending order.
 
@@ -105,8 +105,7 @@ func (ms *MongoUrlStore) AddUrlEntry(ctx context.Context, entry *UrlMappingEntry
 		log.Printf("A short URL already exists for %s", entry.LongUrl)
 		return fmt.Errorf("A short URL already exists for %s.", entry.LongUrl)
 	}
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	insertResult, err := urlTbl.InsertOne(ctx, *entry)
 	if err != nil {
 		log.Printf("Unable to add new URL entry. Err = %v", err)
@@ -122,8 +121,7 @@ func (ms *MongoUrlStore) GetMappedUrl(ctx context.Context, shortUrl string) (str
 		log.Printf("No short URL exists for %s", shortUrl)
 		return "", ErrUrlEntryNotFound
 	}
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	var result UrlMappingEntry
 	err := urlTbl.FindOne(ctx, bson.D{{"short_url", shortUrl}}).Decode(&result)
 
@@ -137,32 +135,36 @@ func (ms *MongoUrlStore) GetMappedUrl(ctx context.Context, shortUrl string) (str
 }
 
 func (ms *MongoUrlStore) CheckIfUrlExists(ctx context.Context, url string, isLong bool) bool {
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	var result bson.M
 
 	if isLong {
 		err := urlTbl.FindOne(ctx, bson.D{{"long_url", url}}).Decode(&result)
 
-		if err == mongo.ErrNoDocuments {
+		if err != nil {
+
+			log.Printf("Unable to connect to MongoDB. Err=%v", err)
 			return false
+
 		}
-		log.Printf("Found an URL mapping entry for Long Url %s. Entry=%+v", url, result)
+
 	} else {
 		err := urlTbl.FindOne(ctx, bson.D{{"short_url", url}}).Decode(&result)
 
-		if err == mongo.ErrNoDocuments {
+		if err != nil {
+
+			log.Printf("Unable to connect to MongoDB. Err=%v", err)
 			return false
+
 		}
-		log.Printf("Found an URL mapping entry for Short Url %s. Entry=%+v", url, result)
+
 	}
 
 	return true
 }
 
 func (ms *MongoUrlStore) DeleteUrlEntry(ctx context.Context, shortUrl string) error {
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	_, err := urlTbl.DeleteOne(ctx, bson.M{"short_url": shortUrl})
 
 	if err != nil {
@@ -177,9 +179,7 @@ func (ms *MongoUrlStore) UpdateUrlHitCount(ctx context.Context, shortUrl string)
 		log.Printf("No short URL exists for %s", shortUrl)
 		return ErrUrlEntryNotFound
 	}
-
-	gatelyDB := ms.c.Database(ms.name)
-	urlTbl := gatelyDB.Collection(ms.collection)
+	urlTbl := ms.c.Database(ms.name).Collection(ms.collection)
 	var result UrlMappingEntry
 	_ = urlTbl.FindOne(ctx, bson.D{{"short_url", shortUrl}}).Decode(&result)
 
